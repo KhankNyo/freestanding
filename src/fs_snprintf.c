@@ -748,6 +748,13 @@ c_fmt:
             );
             break;
 
+        case 'n':
+            {
+                int *p = va_arg(ap, int*);
+                *p = ret;
+            }
+            break;
+
 
 
 
@@ -795,7 +802,7 @@ c_fmt:
 #define DOTEST(bufsz, result, retval, ...) do { \
     char buf[bufsz]; \
     int r;\
-    printf("now test %s\n", #__VA_ARGS__); \
+    printf("[INFO]: Now test %s\n", #__VA_ARGS__); \
     r=fs_snprintf(buf, sizeof(buf), __VA_ARGS__); \
     if(r != retval || strcmp(buf, result) != 0) { \
         printf("  [ERROR]: test(%s) was '%s':%d\n", \
@@ -809,7 +816,7 @@ c_fmt:
                 ""#bufsz", "#result", "#retval", "#__VA_ARGS__, \
                 buf, r); \
     } \
-    printf("test(\"%s\":%d) passed\n", buf, r); \
+    printf("  test(\"%s\":%d) passed\n", buf, r); \
 } while(0);
 
 
@@ -899,8 +906,31 @@ int main(void)
      *         DOTEST(1024, "a", 1, "%.0c", 'a'); */
 
     /* test %n */
-    DOTEST(1024, "hello", 5, "hello%n", &x);
-    if(x != 5) { printf("the %%n failed\n"); exit(1); }
+    {
+        const char *expect = "hello  ";
+        char buf[1024];
+        int fs_x, x, fs_ret, ret;
+
+        printf("[INFO]: Now test %%n\n");
+        fs_ret = fs_snprintf(buf, sizeof buf, "hello  %n", &fs_x);
+        if (strcmp(buf, expect) != 0)
+        {
+            printf("  [ERROR]: mismatched strings: (fs:'%s' != expect:'%s')\n", buf, expect);
+            exit(1);
+        }
+        ret = snprintf(buf, sizeof buf, "hello  %n", &x);
+        if (ret != fs_ret)
+        {
+            printf("  [ERROR]: mismatched return value (fs:%d != std:%d)\n", fs_ret, ret);
+            exit(1);
+        }
+        if (fs_x != x)
+        {
+            printf("  [ERROR]: '%%n' failed: (fs:%d != std:%d)", fs_x, x);
+            exit(1);
+        }
+        printf("  test %%n passed\n");
+    }
 
     /* test %m */
 #ifndef FREESTANDING_TRULY
