@@ -8,6 +8,7 @@
 
 #include "../include/fs_snprintf.h"
 #include "../include/fs_standard.h"
+#include "../include/fs_assert.h"
 
 #ifdef PREDEF_STANDARD_C_1999
 /* shorthand for PREDEF_STANDARD_C_1999 */
@@ -503,6 +504,7 @@ static void print_num_llx(char **bufptr, size_t *left, int *ret,
 static void print_ptr(char **bufptr, size_t *left, int *ret, 
     void *ptr, int minw, int precision, unsigned int flags)
 {
+    FS_STATIC_ASSERT(sizeof(uintptr_t) == sizeof(void*), "incompatible sizes");
     uintptr_t uintptr = (uintptr_t)ptr;
     if (ptr == NULL)
     {
@@ -936,8 +938,10 @@ int main(void)
 #ifndef FREESTANDING_TRULY
 #  ifdef __GNUC__
     errno = 0;
-    const char *es = strerror(errno);
-    DOTEST(1024, es, strlen(es), "%m");
+    {
+        const char *es = strerror(errno);
+        DOTEST(1024, es, strlen(es), "%m");
+    }
 #  endif
 #endif
 
