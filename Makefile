@@ -1,7 +1,7 @@
 CC=gcc
 COMMON_FLAGS=-DFREESTANDING_TRULY -Wall -Wpedantic -Wextra
 
-CCF=-O2 -std=c89 $(COMMON_FLAGS)
+CCF=-O2 -std=c89 -ffreestanding $(COMMON_FLAGS)
 LDF=
 TEST_CCF=-DDEBUG_TEST -O0 -g -std=c99 $(COMMON_FLAGS)
 TEST_LDF=

@@ -3,23 +3,23 @@
 
 
 #if defined(__STDC__)
-# define PREDEF_STANDARD_C_1989
+# define FS_C89
 # if defined(__STDC_VERSION__)
-#  define PREDEF_STANDARD_C_1990
+#  define FS_C90
 #  if (__STDC_VERSION__ >= 199409L)
-#   define PREDEF_STANDARD_C_1994
+#   define FS_C94
 #  endif
 #  if (__STDC_VERSION__ >= 199901L)
-#   define PREDEF_STANDARD_C_1999
+#   define FS_C99
 #  endif
 #  if (__STDC_VERSION__ >= 201112L)
-#   define PREDEF_STANDARD_C_2011
+#   define FS_C11
 #  endif
 #  if (__STDC_VERSION__ >= 201710L)
-#   define PREDEF_STANDARD_C_2017
+#   define FS_C17
 #  endif
 #  if (__STDC_VERSION__ >= 202311L)
-#   define PREDEF_STANDARD_C_2023
+#   define FS_C23
 #  endif
 # endif
 #endif
@@ -27,7 +27,7 @@
 
 
 #ifndef uintptr_t
-#  ifdef PREDEF_STANDARD_C_1999
+#  ifdef FS_C99
 #    define uintptr_t unsigned long long
 #  else
 #    define uintptr_t unsigned long

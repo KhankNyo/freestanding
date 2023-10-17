@@ -6,15 +6,10 @@
 #else
 #endif /* FREESTANDING_TRULY */
 
+#include "../include/fs_int.h"
 #include "../include/fs_snprintf.h"
 #include "../include/fs_standard.h"
 #include "../include/fs_assert.h"
-
-#ifdef PREDEF_STANDARD_C_1999
-/* shorthand for PREDEF_STANDARD_C_1999 */
-#  define C99
-#endif /* C99 */
-
 
 
 
@@ -90,7 +85,7 @@ static unsigned long strlen_up_to(const char *s, unsigned long limit)
 
 
 
-static void spool_str_rev(char **bufptr, size_t *left, int *ret, const char *numstr, int len)
+static void spool_str_rev(char **bufptr, fs_size *left, int *ret, const char *numstr, int len)
 {
     int i = len;
     while (i)
@@ -109,7 +104,7 @@ static void spool_str_rev(char **bufptr, size_t *left, int *ret, const char *num
 
 
 
-static void spool_str(char **bufptr, size_t *left, int *ret, const char *str, int len, int capitalized)
+static void spool_str(char **bufptr, fs_size *left, int *ret, const char *str, int len, int capitalized)
 {
     int i;
     for (i = 0; i < len; i += 1, (*ret) += 1)
@@ -129,7 +124,7 @@ static void spool_str(char **bufptr, size_t *left, int *ret, const char *str, in
 
 
 
-static void print_pad(char **bufptr, size_t *left, int *ret, char pad, int count)
+static void print_pad(char **bufptr, fs_size *left, int *ret, char pad, int count)
 {
     int n = count;
     while (n--)
@@ -146,7 +141,7 @@ static void print_pad(char **bufptr, size_t *left, int *ret, char pad, int count
 
 
 static void print_num(
-    char **bufptr, size_t *left, int *ret, 
+    char **bufptr, fs_size *left, int *ret, 
     int minw, int precision, unsigned int flags,
     const char *numstr, int len)
 {
@@ -280,7 +275,7 @@ static int print_hex_l(char *buf, int bufsz, unsigned long value, unsigned int f
 
 
 
-static void print_num_ld(char **bufptr, size_t *left, int *ret,
+static void print_num_ld(char **bufptr, fs_size *left, int *ret,
     long value, int minw, int precision, unsigned int flags)
 {
     char tmp[DEC_BUFSIZE];
@@ -303,7 +298,7 @@ static void print_num_ld(char **bufptr, size_t *left, int *ret,
 }
 
 
-static void print_num_lu(char **bufptr, size_t *left, int *ret,
+static void print_num_lu(char **bufptr, fs_size *left, int *ret,
     unsigned long value, int minw, int precision, unsigned int flags)
 {
     char tmp[DEC_BUFSIZE];
@@ -318,7 +313,7 @@ static void print_num_lu(char **bufptr, size_t *left, int *ret,
 }
 
 
-static void print_num_lx(char **bufptr, size_t *left, int *ret,
+static void print_num_lx(char **bufptr, fs_size *left, int *ret,
     unsigned long value, int minw, int precision, unsigned int flags)
 {
     char tmp[DEC_BUFSIZE];
@@ -334,7 +329,7 @@ static void print_num_lx(char **bufptr, size_t *left, int *ret,
 
 
 
-static void print_str(char **bufptr, size_t *left, int *ret, 
+static void print_str(char **bufptr, fs_size *left, int *ret, 
     const char *str, int minw, int precision, unsigned int flags)
 {
     long width;
@@ -355,7 +350,7 @@ static void print_str(char **bufptr, size_t *left, int *ret,
 
 
 
-static void print_chr(char **bufptr, size_t *left, int *ret,
+static void print_chr(char **bufptr, fs_size *left, int *ret,
     char ch, int minw, unsigned int flags)
 {
     char character = ch;
@@ -375,7 +370,7 @@ static void print_chr(char **bufptr, size_t *left, int *ret,
 
 
 
-#ifdef C99
+#ifdef FS_C99
 
 /* prints the reversed version of val into buf */
 static int print_decimal_ll(char *buf, int bufsz, unsigned long long val)
@@ -438,7 +433,7 @@ static int print_hex_ll(char *buf, int bufsz, unsigned long value, unsigned int 
 
 
 
-static void print_num_lld(char **bufptr, size_t *left, int *ret,
+static void print_num_lld(char **bufptr, fs_size *left, int *ret,
     long long value, int minw, int precision, unsigned int flags)
 {
     char tmp[DEC_BUFSIZE];
@@ -463,7 +458,7 @@ static void print_num_lld(char **bufptr, size_t *left, int *ret,
 
 
 
-static void print_num_llu(char **bufptr, size_t *left, int *ret,
+static void print_num_llu(char **bufptr, fs_size *left, int *ret,
     unsigned long long value, int minw, int precision, unsigned int flags)
 {
     char tmp[DEC_BUFSIZE];
@@ -479,7 +474,7 @@ static void print_num_llu(char **bufptr, size_t *left, int *ret,
 
 
 
-static void print_num_llx(char **bufptr, size_t *left, int *ret,
+static void print_num_llx(char **bufptr, fs_size *left, int *ret,
     unsigned long long value, int minw, int precision, unsigned int flags)
 {
     char tmp[DEC_BUFSIZE];
@@ -497,25 +492,24 @@ static void print_num_llx(char **bufptr, size_t *left, int *ret,
 
 
 
-#endif /* C99 */
+#endif /* FS_C99 */
 
 
 
-static void print_ptr(char **bufptr, size_t *left, int *ret, 
+static void print_ptr(char **bufptr, fs_size *left, int *ret, 
     void *ptr, int minw, int precision, unsigned int flags)
 {
-    FS_STATIC_ASSERT(sizeof(uintptr_t) == sizeof(void*), "incompatible sizes");
-    uintptr_t uintptr = (uintptr_t)ptr;
-    if (ptr == NULL)
+    typedef union cvt
     {
-        print_str(bufptr, left, ret, "(nil)", minw, precision, flags);
-        return;
-    }
-#ifdef C99
-    print_num_llx(bufptr, left, ret, uintptr, minw, precision, flags | ALTERNATE_FORM);
-#else
-    print_num_lx(bufptr, left, ret, uintptr, minw, precision, flags | ALTERNATE_FORM);
-#endif /* PREDEF_STANDARD_C_99 */
+        char bytes[sizeof(ptr)];
+        void *ptr;
+    } cvt;
+
+    cvt c;
+    c.ptr = ptr;
+
+
+
 }
 
 
@@ -525,7 +519,7 @@ static void print_ptr(char **bufptr, size_t *left, int *ret,
 
 
 
-int fs_snprintf(char *buf, size_t bufsz, const char *fmt, ...)
+int fs_snprintf(char *buf, fs_size bufsz, const char *fmt, ...)
 {
     int ret;
     va_list args;
@@ -535,7 +529,7 @@ int fs_snprintf(char *buf, size_t bufsz, const char *fmt, ...)
     return ret;
 }
 
-int fs_vsnprintf(char *buf, size_t bufsz, const char *fmt, va_list ap)
+int fs_vsnprintf(char *buf, fs_size bufsz, const char *fmt, va_list ap)
 {
     unsigned int flags = 0;
     int minw;
@@ -545,7 +539,7 @@ int fs_vsnprintf(char *buf, size_t bufsz, const char *fmt, va_list ap)
     int ret = 0;
     const char *fmtptr = fmt;
     char *bufptr = buf;
-    size_t left = bufsz;
+    fs_size left = bufsz;
 
     if (left == 0)
         return 0;
