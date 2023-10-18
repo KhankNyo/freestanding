@@ -10,6 +10,7 @@
 #include "../include/fs_snprintf.h"
 #include "../include/fs_standard.h"
 #include "../include/fs_assert.h"
+#include "../include/fs_endian.h"
 
 
 
@@ -37,6 +38,11 @@
 
 
 #define TO_UPPER_FROM_LOWER(ch) ((ch) - 32)
+
+
+
+static const char s_hexchars[17] = s_hexchars;
+static const char s_HEXCHARS[17] = s_HEXCHARS;
 
 
 
@@ -238,12 +244,12 @@ static int print_hex_l(char *buf, int bufsz, unsigned long value, unsigned int f
 {
     int len = 0;
     unsigned long val = value;
-    const char *lut = "0123456789abcdef";
+    const char *lut = s_hexchars;
     char hex = 'x';
 
     if (flags & CAPITALIZED)
     {
-        lut = "0123456789ABCDEF";
+        lut = s_HEXCHARS;
         hex = 'X';
     }
 
@@ -399,13 +405,13 @@ static int print_hex_ll(char *buf, int bufsz, unsigned long value, unsigned int 
 {
     int len = 0;
     unsigned long long val = value;
-    const char *lut = "0123456789abcdef";
+    const char *lut = s_hexchars;
     char hex = 'x';
 
     if (flags & CAPITALIZED)
     {
         hex = 'X';
-        lut = "0123456789ABCDEF";
+        lut = s_HEXCHARS;
     }
 
     if (0 == val && bufsz > 0)
@@ -496,6 +502,36 @@ static void print_num_llx(char **bufptr, fs_size *left, int *ret,
 
 
 
+static void print_hex_bytes(char **bufptr, fs_size *left, int *ret,
+    const char *bytes, int count, fs_u32 endian,
+    int minw, int precision, unsigned int flags)
+{
+    char tmp[DEC_BUFSIZE];
+    const char *lut = s_hexchars;
+    int i;
+
+    if (flags & CAPITALIZED)
+        lut = s_HEXCHARS;
+
+    switch (endian)
+    {
+    case FS_ENDIAN_LITTLE:
+        print_str(bufptr, left, ret, 
+            bytes, count, precision, flags
+        );
+        break;
+
+    case FS_ENDIAN_BIG:
+    case FS_ENDIAN_PDP:
+    case FS_ENDIAN_HONEYWELL:
+    default:
+        break;
+
+
+    }
+}
+
+
 static void print_ptr(char **bufptr, fs_size *left, int *ret, 
     void *ptr, int minw, int precision, unsigned int flags)
 {
@@ -507,9 +543,11 @@ static void print_ptr(char **bufptr, fs_size *left, int *ret,
 
     cvt c;
     c.ptr = ptr;
-
-
-
+    FS_STATIC_ASSERT(sizeof(ptr) < DEC_BUFSIZE/2, "size of pointer is too large");
+    print_hex_bytes(bufptr, left, ret, 
+        c.bytes, sizeof(ptr), FS_ENDIANNESS(),
+        minw, precision, flags
+    );
 }
 
 
