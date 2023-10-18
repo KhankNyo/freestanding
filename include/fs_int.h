@@ -10,7 +10,7 @@
 
 #ifndef FS_USIZE_DEFINED
 #define FS_USIZE_DEFINED
-#  if FS_C99
+#  ifdef FS_C99
 typedef unsigned long long fs_size;
 #  else /* C89 */
 typedef unsigned long fs_size;
