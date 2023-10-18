@@ -7,6 +7,7 @@
 #endif /* FREESTANDING_TRULY */
 
 #include "../include/fs_int.h"
+#include "../include/fs_endianness.h"
 #include "../include/fs_snprintf.h"
 #include "../include/fs_standard.h"
 #include "../include/fs_assert.h"
@@ -496,6 +497,30 @@ static void print_num_llx(char **bufptr, fs_size *left, int *ret,
 
 
 
+static void print_hex_bytes(char **bufptr, fs_size *left, int *ret,
+    const char *bytes, fs_size count, fs_u32 endianness,
+    int minw, int precision, unsigned int flags)
+{
+    fs_size i = 0;
+    const char *lut = "0123456789abcdef";
+    if (flags & ALTERNATE_FORM)
+        lut = "0123456789ABCDEF";
+
+    switch (endianness)
+    {
+    case FS_ENDIAN_LITTLE:
+        for (i = 0; i < count; i += 1)
+        {
+            print_chr(bufptr, left, ret,
+        }
+        break;
+    case FS_ENDIAN_BIG:
+        break;
+    }
+}
+
+
+
 static void print_ptr(char **bufptr, fs_size *left, int *ret, 
     void *ptr, int minw, int precision, unsigned int flags)
 {
@@ -508,8 +533,10 @@ static void print_ptr(char **bufptr, fs_size *left, int *ret,
     cvt c;
     c.ptr = ptr;
 
-
-
+    print_hex_bytes(bufptr, left, ret, 
+       c.bytes, sizeof(ptr), FS_ENDIANNESS(),
+       minw, precision, flags
+    );
 }
 
 
@@ -658,14 +685,14 @@ id_fmt:
                 print_num_ld(&bufptr, &left, &ret, 
                     va_arg(ap, long), minw, precision, flags
                 );
-#ifdef C99
+#ifdef FS_C99
             else if (l_count == 2)
             {
                 print_num_lld(&bufptr, &left, &ret,
                     va_arg(ap, long long), minw, precision, flags
                 );
             }
-#endif /* C99 */
+#endif /* FS_C99 */
             break;
 
 
@@ -678,12 +705,12 @@ id_fmt:
                 print_num_lu(&bufptr, &left, &ret, 
                     va_arg(ap, unsigned long), minw, precision, flags
                 );
-#ifdef C99
+#ifdef FS_C99
             else if (l_count == 2)
                 print_num_llu(&bufptr, &left, &ret, 
                     va_arg(ap, unsigned long long), minw, precision, flags
                 );
-#endif /* C99 */
+#endif /* FS_C99 */
             break;
 
 
@@ -698,12 +725,12 @@ x_fmt:
                 print_num_lx(&bufptr, &left, &ret, 
                     va_arg(ap, unsigned long), minw, precision, flags
                 );
-#ifdef C99
+#ifdef FS_C99
             else if (l_count == 2)
                 print_num_llx(&bufptr, &left, &ret, 
                     va_arg(ap, unsigned long long), minw, precision, flags
                 );
-#endif /* C99 */
+#endif /* FS_C99 */
             break;
 
 
@@ -787,9 +814,9 @@ c_fmt:
 
 
 
-#ifndef C99
+#ifndef FS_C99
 #  error "at least C99 is required for testing code"
-#endif /* C99 */
+#endif /* FS_C99 */
 
 
 

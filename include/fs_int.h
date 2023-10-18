@@ -10,7 +10,7 @@
 
 #ifndef FS_USIZE_DEFINED
 #define FS_USIZE_DEFINED
-#  if FS_C99
+#  ifdef FS_C99
      typedef unsigned long long fs_size;
 #  else /* C89 */
      typedef unsigned long fs_size;
@@ -27,7 +27,7 @@
      typedef unsigned int fs_u16;
      typedef int fs_i16;
 #  else
-#    error "cannot defined 32 bit integer type in '" __FILE__ "'"
+#    error "cannot defined 16 bit integer type in '" __FILE__ "'"
 #  endif
 #endif /* FS_16BIT_DEFINED */
 
