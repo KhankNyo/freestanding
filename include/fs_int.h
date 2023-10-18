@@ -11,23 +11,34 @@
 #ifndef FS_USIZE_DEFINED
 #define FS_USIZE_DEFINED
 #  if FS_C99
-     typedef unsigned long long fs_size;
+typedef unsigned long long fs_size;
 #  else /* C89 */
-     typedef unsigned long fs_size;
+typedef unsigned long fs_size;
 #  endif /* FS_C99 */
 #endif /* FS_USIZE_DEFINED */
+
+
+
+#ifndef FS_8BIT_DEFINED
+#define FS_8BIT_DEFINED
+#  if CHAR_BIT != 8
+#    error "fuck you"
+#  endif
+typedef unsigned char fs_u8;
+typedef char fs_i8;
+#endif /* FS_8BIT_DEFINED */
 
 
 #ifndef FS_16BIT_DEFINED
 #define FS_16BIT_DEFINED
 #  if USHRT_MAX == 0xffffu
-     typedef unsigned short fs_u16;
-     typedef short fs_i16;
+typedef unsigned short fs_u16;
+typedef short fs_i16;
 #  elif UINT_MAX == 0xffffu
-     typedef unsigned int fs_u16;
-     typedef int fs_i16;
+typedef unsigned int fs_u16;
+typedef int fs_i16;
 #  else
-#    error "cannot defined 32 bit integer type in '" __FILE__ "'"
+#    error "cannot defined 16 bit integer type in '" __FILE__ "'"
 #  endif
 #endif /* FS_16BIT_DEFINED */
 
@@ -36,11 +47,11 @@
 #ifndef FS_32BIT_DEFINED
 #define FS_32BIT_DEFINED
 #  if ULONG_MAX == 0xfffffffflu
-     typedef unsigned long fs_u32;
-     typedef long fs_i32;
+typedef unsigned long fs_u32;
+typedef long fs_i32;
 #  elif UING_MAX == 0xfffffffflu
-     typedef unsigned int fs_u32;
-     typedef int fs_i32;
+typedef unsigned int fs_u32;
+typedef int fs_i32;
 #  else
 #    error "cannot define 32 bit integer type in '" __FILE__ "'"
 #  endif
