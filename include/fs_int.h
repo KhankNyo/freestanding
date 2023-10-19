@@ -25,7 +25,7 @@ typedef unsigned long fs_size;
 #    error "fuck you"
 #  endif
 typedef unsigned char fs_u8;
-typedef char fs_i8;
+typedef signed char fs_i8;
 #endif /* FS_8BIT_DEFINED */
 
 
@@ -55,10 +55,10 @@ typedef int fs_i32;
 #  else
 #    error "cannot define 32 bit integer type in '" __FILE__ "'"
 #  endif
-#endif /* FS_U32_DEFINED */
+#endif /* FS_32BIT_DEFINED */
 
 
-#ifdef FS_C99
+#ifdef ULLONG_MAX /* check long long extension in C89 */
 #  ifndef FS_64BIT_DEFINED
 #  define FS_64BIT_DEFINED
 #    if ULLONG_MAX == 0xffffffffffffffffllu
@@ -71,7 +71,7 @@ typedef long fs_i64;
 #      error "cannot define 64 bit integer type in '" __FILE__ "'"
 #    endif
 #  endif /* FS_64BIT_DEFINED */
-#endif /* FS_C99 */
+#endif /* ULLONG_MAX */
 
 
 
