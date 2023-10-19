@@ -11,6 +11,7 @@
 #include "../include/fs_snprintf.h"
 #include "../include/fs_standard.h"
 #include "../include/fs_assert.h"
+#include "../include/fs_endian.h"
 
 
 
@@ -20,6 +21,7 @@
 
 
 #define DEC_BUFSIZE 32
+#define HEX_BUFSIZE 48
 
 /* flags */
 #define SPACE (1 << 0)
@@ -38,6 +40,11 @@
 
 
 #define TO_UPPER_FROM_LOWER(ch) ((ch) - 32)
+
+
+
+static const char s_hexchars[17] = "0123456789abcdef";
+static const char s_HEXCHARS[17] = "0123456789ABCDEF";
 
 
 
@@ -105,7 +112,8 @@ static void spool_str_rev(char **bufptr, fs_size *left, int *ret, const char *nu
 
 
 
-static void spool_str(char **bufptr, fs_size *left, int *ret, const char *str, int len, int capitalized)
+static void spool_str(char **bufptr, fs_size *left, int *ret, 
+    const char *str, int len, unsigned int capitalized)
 {
     int i;
     for (i = 0; i < len; i += 1, (*ret) += 1)
@@ -141,7 +149,7 @@ static void print_pad(char **bufptr, fs_size *left, int *ret, char pad, int coun
 }
 
 
-static void print_num(
+static void print_num_pad(
     char **bufptr, fs_size *left, int *ret, 
     int minw, int precision, unsigned int flags,
     const char *numstr, int len)
@@ -239,12 +247,12 @@ static int print_hex_l(char *buf, int bufsz, unsigned long value, unsigned int f
 {
     int len = 0;
     unsigned long val = value;
-    const char *lut = "0123456789abcdef";
+    const char *lut = s_hexchars;
     char hex = 'x';
 
     if (flags & CAPITALIZED)
     {
-        lut = "0123456789ABCDEF";
+        lut = s_HEXCHARS;
         hex = 'X';
     }
 
@@ -293,7 +301,7 @@ static void print_num_ld(char **bufptr, fs_size *left, int *ret,
         abs_val = value;
 
     len = print_decimal_l(tmp, DEC_BUFSIZE, abs_val);
-    print_num(bufptr, left, ret, minw, precision, flags2,  
+    print_num_pad(bufptr, left, ret, minw, precision, flags2,  
         tmp, len
     );
 }
@@ -308,7 +316,7 @@ static void print_num_lu(char **bufptr, fs_size *left, int *ret,
     flags2 = flags2 | ((value == 0) << VALUE_ZERO_POS);
 
     len = print_decimal_l(tmp, DEC_BUFSIZE, value);
-    print_num(bufptr, left, ret, minw, precision, flags2,  
+    print_num_pad(bufptr, left, ret, minw, precision, flags2,  
         tmp, len
     );
 }
@@ -323,7 +331,7 @@ static void print_num_lx(char **bufptr, fs_size *left, int *ret,
     flags2 = flags2 | ((value == 0) << VALUE_ZERO_POS);
 
     len = print_hex_l(tmp, DEC_BUFSIZE, value, flags2);
-    print_num(bufptr, left, ret, minw, precision, flags2, 
+    print_num_pad(bufptr, left, ret, minw, precision, flags2, 
         tmp, len
     );
 }
@@ -400,13 +408,13 @@ static int print_hex_ll(char *buf, int bufsz, unsigned long value, unsigned int 
 {
     int len = 0;
     unsigned long long val = value;
-    const char *lut = "0123456789abcdef";
+    const char *lut = s_hexchars;
     char hex = 'x';
 
     if (flags & CAPITALIZED)
     {
         hex = 'X';
-        lut = "0123456789ABCDEF";
+        lut = s_HEXCHARS;
     }
 
     if (0 == val && bufsz > 0)
@@ -451,7 +459,7 @@ static void print_num_lld(char **bufptr, fs_size *left, int *ret,
         abs_val = value;
 
     len = print_decimal_ll(tmp, DEC_BUFSIZE, abs_val);
-    print_num(bufptr, left, ret, minw, precision, flags2,  
+    print_num_pad(bufptr, left, ret, minw, precision, flags2,  
         tmp, len
     );
 }
@@ -468,7 +476,7 @@ static void print_num_llu(char **bufptr, fs_size *left, int *ret,
     flags2 = flags2 | ((value == 0) << VALUE_ZERO_POS);
 
     len = print_decimal_ll(tmp, DEC_BUFSIZE, value);
-    print_num(bufptr, left, ret, minw, precision, flags2,  
+    print_num_pad(bufptr, left, ret, minw, precision, flags2,  
         tmp, len
     );
 }
@@ -484,7 +492,7 @@ static void print_num_llx(char **bufptr, fs_size *left, int *ret,
     flags2 = flags2 | ((value == 0) << VALUE_ZERO_POS);
 
     len = print_hex_ll(tmp, DEC_BUFSIZE, value, flags2);
-    print_num(bufptr, left, ret, minw, precision, flags2, 
+    print_num_pad(bufptr, left, ret, minw, precision, flags2, 
         tmp, len
     );
 }
@@ -497,45 +505,155 @@ static void print_num_llx(char **bufptr, fs_size *left, int *ret,
 
 
 
-static void print_hex_bytes(char **bufptr, fs_size *left, int *ret,
-    const char *bytes, fs_size count, fs_u32 endianness,
-    int minw, int precision, unsigned int flags)
+/* interprets bytes[start..end] as a little endian hex number 
+ *  and prints the reversed string to outbuf 
+ * assumptions:
+ *      end*2 - start < HEX_BUFSIZE
+ *      sizeof(outbuf) == HEX_BUFSIZE
+ *      sizeof(bytes) == end
+ *      lut is either s_hexchars or s_HEXCHARS
+ * returns:
+ *      the length written to outbuf will be returned
+ *      outbuf will not be null terminated
+ */
+static unsigned int print_le_hex_bytes(char *outbuf, 
+    const fs_u8 *bytes, const char *lut, unsigned int start, unsigned int end)
 {
-    fs_size i = 0;
-    const char *lut = "0123456789abcdef";
-    if (flags & ALTERNATE_FORM)
-        lut = "0123456789ABCDEF";
-
-    switch (endianness)
+    unsigned int i = start;
+    unsigned int stop = (end - start)*2 + start;
+    for (; i < stop; i += 1)
     {
-    case FS_ENDIAN_LITTLE:
-        for (i = 0; i < count; i += 1)
-        {
-            print_chr(bufptr, left, ret,
-        }
-        break;
-    case FS_ENDIAN_BIG:
-        break;
+        unsigned int ch_index = 0xF 
+            & (bytes[i/2] >> (4*(i % 2)));
+        outbuf[i] = lut[ch_index];
     }
+    return i;
 }
 
 
 
-static void print_ptr(char **bufptr, fs_size *left, int *ret, 
-    void *ptr, int minw, int precision, unsigned int flags)
+/* interprets bytes[start..end] as a big endian hex number
+ *      and prints the reversed string to outbuf 
+ * assumptions:
+ *      end*2 - start < HEX_BUFSIZE
+ *      sizeof(outbuf) == HEX_BUFSIZE
+ *      sizeof(bytes) == end
+ *      lut is either s_hexchars or s_HEXCHARS
+ * returns:
+ *      the length written to outbuf will be returned
+ *      outbuf will not be null terminated
+ */
+static unsigned int print_be_hex_bytes(char *outbuf,
+    const fs_u8 *bytes, const char *lut, unsigned int start, unsigned int end)
 {
-    typedef union cvt
+    unsigned int i = end*2 - 1;
+    for (; i > start; i -= 1)
     {
-        char bytes[sizeof(ptr)];
-        void *ptr;
+        unsigned int ch_index = 0xF 
+            & (bytes[i/2] >> (4*(i % 2)));
+        outbuf[i] = lut[ch_index];
+    }
+    outbuf[start] = lut[bytes[start] >> 4];
+    outbuf[start] = lut[bytes[start] & 0xF];
+
+    return i;
+}
+
+
+
+/* outbuf is assumed to have a size of HEX_BUFSIZE */
+static int print_hex_bytes(char *outbuf, const void *ptr, unsigned int flags)
+{
+    const char *lut = s_hexchars;
+    char hex = 'x';
+    union {
+        fs_u8 bytes[sizeof(ptr)];
+        const void *ptr;
     } cvt;
+    unsigned int i = 0;
 
-    cvt c;
-    c.ptr = ptr;
 
-    print_hex_bytes(bufptr, left, ret, 
-       c.bytes, sizeof(ptr), FS_ENDIANNESS(),
-       minw, precision, flags
+    cvt.ptr = ptr;
+    if (flags & CAPITALIZED)
+    {
+        lut = s_HEXCHARS;
+        hex = 'X';
+    }
+
+
+    switch (FS_ENDIANNESS())
+    {
+    case FS_ENDIAN_LITTLE:
+        /* bytes    :   00 01 02 03  */
+        i = print_le_hex_bytes(outbuf, cvt.bytes, lut, 
+            0, sizeof(ptr)
+        );
+        break;
+
+    case FS_ENDIAN_BIG:
+        /* bytes    :   03 02 01 00 */
+        i = print_be_hex_bytes(outbuf, cvt.bytes, lut, 
+            0, sizeof(ptr)
+        );
+        break;
+
+    case FS_ENDIAN_PDP:
+        /* bytes    :   01 00 03 02
+         *  big endian for half of the machine word
+         */
+        print_be_hex_bytes(outbuf,cvt.bytes, lut, 
+            0, sizeof(ptr)/2
+        );
+        i = print_be_hex_bytes(outbuf, cvt.bytes, lut, 
+            sizeof(ptr)/2, sizeof(ptr)
+        );
+        break;
+
+    case FS_ENDIAN_HONEYWELL:
+        /* bytes    :   03 02 00 01 
+         *  like pdp but higher order bytes come first 
+         */
+        FS_STATIC_ASSERT(0, "TODO: honeywell endian");
+        break;
+    default:
+        return 0;
+    }
+
+
+    /* outbuf   :   "00102030x0"*/
+    if (!(flags & ALTERNATE_FORM))
+    {
+        /* trim the leading zeros */
+        while (i > 1 && (outbuf[i - 1] == '0')) 
+            i -= 1;
+    }
+    /* 0x */
+    outbuf[i] = hex;
+    outbuf[i + 1] = '0';
+    i += 2;
+    return i;
+}
+
+
+static void print_ptr(char **bufptr, fs_size *left, int *ret, 
+    const void *ptr, int minw, int precision, unsigned int flags)
+{
+    char hexbuf[HEX_BUFSIZE];
+    FS_STATIC_ASSERT(sizeof(ptr)*2 + 2 < HEX_BUFSIZE, "pointer size is too large");
+    int len;
+
+    if (NULL == ptr)
+    {
+        print_str(bufptr, left, ret, 
+            "(nil)", minw, precision, flags
+        );
+        return;
+    }
+
+    len = print_hex_bytes(hexbuf, ptr, flags);
+    print_num_pad(bufptr, left, ret, minw, 
+        precision, flags, 
+        hexbuf, len
     );
 }
 
@@ -761,7 +879,7 @@ c_fmt:
 
         case 'p':
             print_ptr(&bufptr, &left, &ret,
-                va_arg(ap, void*), minw, precision, flags
+                va_arg(ap, const void *), minw, precision, flags
             );
             break;
 

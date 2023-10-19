@@ -2,7 +2,7 @@
 #define FREESTANDING_ASSERT_H
 
 
-#define FS_STATIC_ASSERT(expr, msg) int static_assert(int static_assert[(expr)?1:-1]) 
+#define FS_STATIC_ASSERT(expr, msg) int fs_static_assert(int fs_static_assert[(expr)?1:-1]) 
 
 
 
