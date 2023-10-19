@@ -21,8 +21,14 @@
 
 #define DEC_BUFSIZE 32
 #define HEX_BUFSIZE (sizeof(void*) * 2 + 2)
-#define FLT_BUFSIZE 64
-#define FLT_PRECISION 6
+#define FLT_BUFSIZE 64 /* 32 for decimal, 32 for remainder */
+#define FLT_DEFAULT_PRECISION 6
+
+#ifdef FS_64BIT_DEFINED
+#  define FLT_MAX_PRECISION 19 /* (int)log_10(2^64 - 1) */ 
+#else
+#  define FLT_MAX_PRECISION 9 /* (int)log_10(2^32 - 1) */
+#endif
 
 /* flags */
 #define SPACE (1 << 0)
@@ -46,6 +52,7 @@
 
 static const char s_hexchars[17] = "0123456789abcdef";
 static const char s_HEXCHARS[17] = "0123456789ABCDEF";
+static const char s_nullptr_string[6] = "(nil)";
 
 
 
@@ -380,7 +387,7 @@ static void print_chr(char **bufptr, fs_size *left, int *ret,
 
 
 
-#ifdef FS_C99
+#ifdef FS_64BIT_DEFINED
 
 /* prints the reversed version of val into buf */
 static int print_decimal_ll(char *buf, int bufsz, unsigned long long val)
@@ -502,7 +509,139 @@ static void print_num_llx(char **bufptr, fs_size *left, int *ret,
 
 
 
-#endif /* FS_C99 */
+
+
+static int print_float_remainder(char *buf, int len,
+    double remainder, int precision)
+{
+    int count = 0;
+    fs_u64 value;
+    unsigned int shift = 1; /* power of 10 required to turn the remainder into a whole number */
+    int i;
+
+    if (precision > FLT_MAX_PRECISION)
+        precision = FLT_MAX_PRECISION;
+    if (len < precision)
+        return 0;
+
+
+    for (i = 0; i < precision; i += 1)
+        shift *= 10;
+    remainder *= (double)shift;
+
+    value = (fs_u64)remainder;
+    if (((remainder - (double)value) >= 0.5))
+    {
+        value += 1;
+        if (value >= shift) 
+            value = shift - 1;
+    }
+    count = print_decimal_ll(buf, len, value);
+
+    /* pad zeros for numbers like 0.004 */
+    while (count < precision)
+    {
+        buf[count] = '0';
+        count += 1;
+    }
+    if (count < len)
+    {
+        buf[count] = '.';
+        count += 1;
+    }
+    return count;
+}
+
+
+
+/* value itself should NOT be negative */
+static int print_float(char *buf, int len, 
+    double value, int precision)
+{
+    int fltlen = 0;
+
+    fs_u64 whole = (fs_u64)value;
+    double remainder = value - (double)whole;
+    if (precision)
+        fltlen = print_float_remainder(buf, len,
+            remainder, precision
+        );
+
+    fltlen += print_decimal_ll(buf + fltlen, len - fltlen, whole);
+    return fltlen;
+}
+
+
+
+
+#else 
+
+
+
+
+static int print_float_remainder(char *buf, int len,
+    double remainder, int precision)
+{
+    int count = 0;
+    fs_u32 value;
+    unsigned int shift = 1; /* power of 10 required to turn the remainder into a whole number */
+    int i;
+
+    if (precision > FLT_MAX_PRECISION)
+        precision = FLT_MAX_PRECISION;
+    if (len < precision)
+        return 0;
+
+
+    for (i = 0; i < precision; i += 1)
+        shift *= 10;
+    remainder *= (double)shift;
+
+    value = (fs_u32)remainder;
+    if (((remainder - (double)value) >= 0.5))
+    {
+        value += 1;
+        if (value >= shift) 
+            value = shift - 1;
+    }
+    count = print_decimal_l(buf, len, value);
+
+    /* pad zeros for numbers like 0.004 */
+    while (count < precision)
+    {
+        buf[count] = '0';
+        count += 1;
+    }
+    if (count < len)
+    {
+        buf[count] = '.';
+        count += 1;
+    }
+    return count;
+}
+
+
+/* value itself should NOT be negative */
+static int print_float(char *buf, int len, 
+    double value, int precision)
+{
+    int fltlen = 0;
+
+    fs_u32 whole = (fs_u32)value;
+    double remainder = value - (double)whole;
+    if (precision)
+        fltlen = print_float_remainder(buf, len,
+            remainder, precision
+        );
+
+    fltlen += print_decimal_l(buf + fltlen, len - fltlen, whole);
+    return fltlen;
+}
+
+
+
+
+#endif /* FS_64BIT_DEFINED */
 
 
 
@@ -559,7 +698,7 @@ static void print_ptr(char **bufptr, fs_size *left, int *ret,
     if (NULL == ptr)
     {
         print_str(bufptr, left, ret, 
-            "(nil)", minw, precision, flags
+            s_nullptr_string, minw, precision, flags
         );
         return;
     }
@@ -578,42 +717,6 @@ static void print_ptr(char **bufptr, fs_size *left, int *ret,
 
 
 
-
-
-
-
-static int print_float(char *buf, int len, 
-    double value, int precision, unsigned int flags)
-{
-    int fltlen = 0;
-
-#ifdef FS_C99
-    fs_u64 rounded = (fs_u64)value;
-    double remainder = value - (double)rounded;
-    if (precision)
-        fltlen = print_float_remainder(buf, len,
-            remainder, precision
-        );
-
-    fltlen += print_decimal_ll(buf, len,
-        remainder, precision
-    );
-#else
-    fs_u32 rounded = (fs_u32)value;
-    double remainder = value - (double)rounded;
-    if (precision)
-        fltlen = print_float_remainder(buf, len,
-            remainder, precision
-        );
-
-    fltlen += print_decimal_l(buf, len, rounded);
-#endif /* FS_C99 */
-
-    return fltlen;
-}
-
-
-
 static void print_num_f(char **bufptr, fs_size *left, int *ret,
     double num, int minw, int precision, unsigned int flags_)
 {
@@ -622,12 +725,16 @@ static void print_num_f(char **bufptr, fs_size *left, int *ret,
     unsigned int flags = flags_;
 
     flags = flags | ((num == 0) << VALUE_ZERO_POS);
-    flags = flags | ((num < 0) << VALUE_NEG_POS);
+    if (num < 0)
+    {
+        flags |= VALUE_NEG;
+        num = -num;
+    }
     if (!(flags & PRECISION_PROVIDED))
-        precision = FLT_PRECISION;
+        precision = FLT_DEFAULT_PRECISION;
 
     len = print_float(tmp, sizeof(tmp), 
-        num, precision, flags
+        num, precision
     );
     print_num_pad(bufptr, left, ret, 
         minw, precision, flags,
@@ -794,12 +901,12 @@ id_fmt:
                 print_num_ld(&bufptr, &left, &ret, 
                     va_arg(ap, int), minw, precision, flags
                 );
-#ifdef FS_C99
+#ifdef FS_64BIT_DEFINED
             else if (l_count == 2)
                 print_num_lld(&bufptr, &left, &ret,
                     va_arg(ap, long long), minw, precision, flags
                 );
-#endif /* FS_C99 */
+#endif /* FS_64BIT_DEFINED */
             else
                 print_num_ld(&bufptr, &left, &ret, 
                     va_arg(ap, long), minw, precision, flags
@@ -812,12 +919,12 @@ id_fmt:
                 print_num_lu(&bufptr, &left, &ret, 
                     va_arg(ap, unsigned int), minw, precision, flags
                 );
-#ifdef FS_C99
+#ifdef FS_64BIT_DEFINED
             else if (l_count == 2)
                 print_num_llu(&bufptr, &left, &ret, 
                     va_arg(ap, unsigned long long), minw, precision, flags
                 );
-#endif /* FS_C99 */
+#endif /* FS_64BIT_DEFINED */
             else if (l_count == 1)
                 print_num_lu(&bufptr, &left, &ret, 
                     va_arg(ap, unsigned long), minw, precision, flags
@@ -832,12 +939,12 @@ x_fmt:
                 print_num_lx(&bufptr, &left, &ret, 
                     va_arg(ap, unsigned int), minw, precision, flags
                 );
-#ifdef FS_C99
+#ifdef FS_64BIT_DEFINED
             else if (l_count == 2)
                 print_num_llx(&bufptr, &left, &ret, 
                     va_arg(ap, unsigned long long), minw, precision, flags
                 );
-#endif /* FS_C99 */
+#endif /* FS_64BIT_DEFINED */
             else if (l_count == 1)
                 print_num_lx(&bufptr, &left, &ret, 
                     va_arg(ap, unsigned long), minw, precision, flags
