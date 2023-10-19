@@ -7,7 +7,6 @@
 #endif /* FREESTANDING_TRULY */
 
 #include "../include/fs_int.h"
-#include "../include/fs_endianness.h"
 #include "../include/fs_snprintf.h"
 #include "../include/fs_standard.h"
 #include "../include/fs_assert.h"
@@ -21,7 +20,7 @@
 
 
 #define DEC_BUFSIZE 32
-#define HEX_BUFSIZE 48
+#define HEX_BUFSIZE (sizeof(void*) * 2 + 2)
 
 /* flags */
 #define SPACE (1 << 0)
@@ -505,61 +504,6 @@ static void print_num_llx(char **bufptr, fs_size *left, int *ret,
 
 
 
-/* interprets bytes[start..end] as a little endian hex number 
- *  and prints the reversed string to outbuf 
- * assumptions:
- *      end*2 - start < HEX_BUFSIZE
- *      sizeof(outbuf) == HEX_BUFSIZE
- *      sizeof(bytes) == end
- *      lut is either s_hexchars or s_HEXCHARS
- * returns:
- *      the length written to outbuf will be returned
- *      outbuf will not be null terminated
- */
-static unsigned int print_le_hex_bytes(char *outbuf, 
-    const fs_u8 *bytes, const char *lut, unsigned int start, unsigned int end)
-{
-    unsigned int i = start;
-    unsigned int stop = (end - start)*2 + start;
-    for (; i < stop; i += 1)
-    {
-        unsigned int ch_index = 0xF 
-            & (bytes[i/2] >> (4*(i % 2)));
-        outbuf[i] = lut[ch_index];
-    }
-    return i;
-}
-
-
-
-/* interprets bytes[start..end] as a big endian hex number
- *      and prints the reversed string to outbuf 
- * assumptions:
- *      end*2 - start < HEX_BUFSIZE
- *      sizeof(outbuf) == HEX_BUFSIZE
- *      sizeof(bytes) == end
- *      lut is either s_hexchars or s_HEXCHARS
- * returns:
- *      the length written to outbuf will be returned
- *      outbuf will not be null terminated
- */
-static unsigned int print_be_hex_bytes(char *outbuf,
-    const fs_u8 *bytes, const char *lut, unsigned int start, unsigned int end)
-{
-    unsigned int i = end*2 - 1;
-    for (; i > start; i -= 1)
-    {
-        unsigned int ch_index = 0xF 
-            & (bytes[i/2] >> (4*(i % 2)));
-        outbuf[i] = lut[ch_index];
-    }
-    outbuf[start] = lut[bytes[start] >> 4];
-    outbuf[start] = lut[bytes[start] & 0xF];
-
-    return i;
-}
-
-
 
 /* outbuf is assumed to have a size of HEX_BUFSIZE */
 static int print_hex_bytes(char *outbuf, const void *ptr, unsigned int flags)
@@ -581,46 +525,15 @@ static int print_hex_bytes(char *outbuf, const void *ptr, unsigned int flags)
     }
 
 
-    switch (FS_ENDIANNESS())
+    fs_endian_host_to_little(cvt.bytes, 1, sizeof(ptr));
+    for (; i < sizeof(ptr)*2; i += 2)
     {
-    case FS_ENDIAN_LITTLE:
-        /* bytes    :   00 01 02 03  */
-        i = print_le_hex_bytes(outbuf, cvt.bytes, lut, 
-            0, sizeof(ptr)
-        );
-        break;
-
-    case FS_ENDIAN_BIG:
-        /* bytes    :   03 02 01 00 */
-        i = print_be_hex_bytes(outbuf, cvt.bytes, lut, 
-            0, sizeof(ptr)
-        );
-        break;
-
-    case FS_ENDIAN_PDP:
-        /* bytes    :   01 00 03 02
-         *  big endian for half of the machine word
-         */
-        print_be_hex_bytes(outbuf,cvt.bytes, lut, 
-            0, sizeof(ptr)/2
-        );
-        i = print_be_hex_bytes(outbuf, cvt.bytes, lut, 
-            sizeof(ptr)/2, sizeof(ptr)
-        );
-        break;
-
-    case FS_ENDIAN_HONEYWELL:
-        /* bytes    :   03 02 00 01 
-         *  like pdp but higher order bytes come first 
-         */
-        FS_STATIC_ASSERT(0, "TODO: honeywell endian");
-        break;
-    default:
-        return 0;
+        outbuf[i] = lut[0xF & cvt.bytes[i/2]];              /* lower 4 bits */
+        outbuf[i + 1] = lut[0xF & (cvt.bytes[i/2] >> 4)];   /* upper 4 bits */
     }
 
 
-    /* outbuf   :   "00102030x0"*/
+    /* outbuf   :   "00102030" */
     if (!(flags & ALTERNATE_FORM))
     {
         /* trim the leading zeros */
@@ -639,7 +552,6 @@ static void print_ptr(char **bufptr, fs_size *left, int *ret,
     const void *ptr, int minw, int precision, unsigned int flags)
 {
     char hexbuf[HEX_BUFSIZE];
-    FS_STATIC_ASSERT(sizeof(ptr)*2 + 2 < HEX_BUFSIZE, "pointer size is too large");
     int len;
 
     if (NULL == ptr)
@@ -685,9 +597,6 @@ int fs_vsnprintf(char *buf, fs_size bufsz, const char *fmt, va_list ap)
     const char *fmtptr = fmt;
     char *bufptr = buf;
     fs_size left = bufsz;
-
-    if (left == 0)
-        return 0;
 
 
     while (*fmtptr)
@@ -966,8 +875,6 @@ c_fmt:
 /** test program */
 int main(void)
 {
-    int x = 0;
-
     /* bufsize, expectedstring, expectedretval, snprintf arguments */
     DOTEST(1024, "hello", 5, "hello");
     DOTEST(1024, "h", 1, "h");
