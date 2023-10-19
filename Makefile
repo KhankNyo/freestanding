@@ -1,5 +1,5 @@
 CC=gcc
-COMMON_FLAGS=-DFREESTANDING_TRULY -Wall -Wpedantic -Wextra
+COMMON_FLAGS=-Wno-long-long -DFREESTANDING_TRULY -Wall -Wpedantic -Wextra
 
 CCF=-O2 -std=c89 -ffreestanding $(COMMON_FLAGS)
 LDF=
