@@ -21,6 +21,8 @@
 
 #define DEC_BUFSIZE 32
 #define HEX_BUFSIZE (sizeof(void*) * 2 + 2)
+#define FLT_BUFSIZE 64
+#define FLT_PRECISION 6
 
 /* flags */
 #define SPACE (1 << 0)
@@ -576,6 +578,90 @@ static void print_ptr(char **bufptr, fs_size *left, int *ret,
 
 
 
+
+
+
+
+static int print_float(char *buf, int len, 
+    double value, int precision, unsigned int flags)
+{
+    int fltlen = 0;
+
+#ifdef FS_C99
+    fs_u64 rounded = (fs_u64)value;
+    double remainder = value - (double)rounded;
+    if (precision)
+        fltlen = print_float_remainder(buf, len,
+            remainder, precision
+        );
+
+    fltlen += print_decimal_ll(buf, len,
+        remainder, precision
+    );
+#else
+    fs_u32 rounded = (fs_u32)value;
+    double remainder = value - (double)rounded;
+    if (precision)
+        fltlen = print_float_remainder(buf, len,
+            remainder, precision
+        );
+
+    fltlen += print_decimal_l(buf, len, rounded);
+#endif /* FS_C99 */
+
+    return fltlen;
+}
+
+
+
+static void print_num_f(char **bufptr, fs_size *left, int *ret,
+    double num, int minw, int precision, unsigned int flags_)
+{
+    char tmp[FLT_BUFSIZE];
+    int len;
+    unsigned int flags = flags_;
+
+    flags = flags | ((num == 0) << VALUE_ZERO_POS);
+    flags = flags | ((num < 0) << VALUE_NEG_POS);
+    if (!(flags & PRECISION_PROVIDED))
+        precision = FLT_PRECISION;
+
+    len = print_float(tmp, sizeof(tmp), 
+        num, precision, flags
+    );
+    print_num_pad(bufptr, left, ret, 
+        minw, precision, flags,
+        tmp, len
+    );
+}
+
+
+static void print_num_lf(char **bufptr, fs_size *left, int *ret,
+    long double num, int minw, int precision, unsigned int flags)
+{
+}
+
+
+static void print_num_g(char **bufptr, fs_size *left, int *ret,
+    double num, int minw, int precision, unsigned int flags)
+{
+}
+
+
+static void print_num_lg(char **bufptr, fs_size *left, int *ret,
+    long double num, int minw, int precision, unsigned int flags)
+{
+}
+
+
+
+
+
+
+
+
+
+
 int fs_snprintf(char *buf, fs_size bufsz, const char *fmt, ...)
 {
     int ret;
@@ -708,18 +794,16 @@ id_fmt:
                 print_num_ld(&bufptr, &left, &ret, 
                     va_arg(ap, int), minw, precision, flags
                 );
-            else if (l_count == 1)
-                print_num_ld(&bufptr, &left, &ret, 
-                    va_arg(ap, long), minw, precision, flags
-                );
 #ifdef FS_C99
             else if (l_count == 2)
-            {
                 print_num_lld(&bufptr, &left, &ret,
                     va_arg(ap, long long), minw, precision, flags
                 );
-            }
 #endif /* FS_C99 */
+            else
+                print_num_ld(&bufptr, &left, &ret, 
+                    va_arg(ap, long), minw, precision, flags
+                );
             break;
 
 
@@ -728,16 +812,16 @@ id_fmt:
                 print_num_lu(&bufptr, &left, &ret, 
                     va_arg(ap, unsigned int), minw, precision, flags
                 );
-            else if (l_count == 1)
-                print_num_lu(&bufptr, &left, &ret, 
-                    va_arg(ap, unsigned long), minw, precision, flags
-                );
 #ifdef FS_C99
             else if (l_count == 2)
                 print_num_llu(&bufptr, &left, &ret, 
                     va_arg(ap, unsigned long long), minw, precision, flags
                 );
 #endif /* FS_C99 */
+            else if (l_count == 1)
+                print_num_lu(&bufptr, &left, &ret, 
+                    va_arg(ap, unsigned long), minw, precision, flags
+                );
             break;
 
 
@@ -748,16 +832,16 @@ x_fmt:
                 print_num_lx(&bufptr, &left, &ret, 
                     va_arg(ap, unsigned int), minw, precision, flags
                 );
-            else if (l_count == 1)
-                print_num_lx(&bufptr, &left, &ret, 
-                    va_arg(ap, unsigned long), minw, precision, flags
-                );
 #ifdef FS_C99
             else if (l_count == 2)
                 print_num_llx(&bufptr, &left, &ret, 
                     va_arg(ap, unsigned long long), minw, precision, flags
                 );
 #endif /* FS_C99 */
+            else if (l_count == 1)
+                print_num_lx(&bufptr, &left, &ret, 
+                    va_arg(ap, unsigned long), minw, precision, flags
+                );
             break;
 
 
@@ -799,10 +883,29 @@ c_fmt:
             break;
 
         case 'n':
-            {
-                int *p = va_arg(ap, int*);
-                *p = ret;
-            }
+            *va_arg(ap, int*) = ret;
+            break;
+
+        case 'f':
+            if (l_count)
+                print_num_lf(&bufptr, &left, &ret, 
+                    va_arg(ap, long double), minw, precision, flags
+                );
+            else
+                print_num_f(&bufptr, &left, &ret,
+                    va_arg(ap, double), minw, precision, flags
+                );
+            break;
+
+        case 'g': 
+            if (l_count)
+                print_num_lg(&bufptr, &left, &ret, 
+                    va_arg(ap, long double), minw, precision, flags
+                );
+            else
+                print_num_g(&bufptr, &left, &ret,
+                    va_arg(ap, double), minw, precision, flags
+                );
             break;
 
 
@@ -817,7 +920,6 @@ c_fmt:
 
     if (left > 0)
         *bufptr = 0;
-    else bufptr[-1] = 0;
     return ret;
 }
 
