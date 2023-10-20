@@ -4,7 +4,7 @@
 #  include <errno.h>
 #  include <string.h>
 #else
-#endif /* FREESTANDING_TRULY */
+#endif /* !FREESTANDING_TRULY */
 
 #include "../include/fs_int.h"
 #include "../include/fs_snprintf.h"
@@ -32,22 +32,23 @@
 
 
 /* flags */
-#define SPACE (1 << 0)
-#define PAD_RIGHT (1 << 1)
-#define PLUS (1 << 2)
-#define ZEROPAD (1 << 3)
-#define ALTERNATE_FORM (1 << 4)
-#define PRECISION_PROVIDED (1 << 5)
-#define CAPITALIZED (1 << 6)
+#define SPACE               ((unsigned)1 << 0)
+#define PAD_RIGHT           ((unsigned)1 << 1)
+#define PLUS                ((unsigned)1 << 2)
+#define ZEROPAD             ((unsigned)1 << 3)
+#define ALTERNATE_FORM      ((unsigned)1 << 4)
+#define PRECISION_PROVIDED  ((unsigned)1 << 5)
+#define CAPITALIZED         ((unsigned)1 << 6)
 
 
-#define VALUE_NEG_POS 7
-#define VALUE_ZERO_POS 8
-#define VALUE_NEG (1 << VALUE_NEG_POS)
-#define VALUE_ZERO (1 << VALUE_ZERO_POS)
+#define VALUE_NEG_POS       7
+#define VALUE_ZERO_POS      8
+#define VALUE_NEG           ((unsigned)1 << VALUE_NEG_POS)
+#define VALUE_ZERO          ((unsigned)1 << VALUE_ZERO_POS)
 
 
 #define TO_UPPER_FROM_LOWER(ch) ((ch) - 32)
+#define TO_LOWER_FROM_UPPER(ch) ((ch) + 32)
 
 
 
@@ -67,6 +68,12 @@ static int is_number(char ch)
 static int is_lower(char ch)
 {
     return ('a' <= ch) && (ch <= 'z');
+}
+
+
+static int is_upper(char ch)
+{
+    return ('A' <= ch) && (ch <= 'Z');
 }
 
 
@@ -301,8 +308,8 @@ static void print_num_ld(char **bufptr, fs_size *left, int *ret,
     int len;
     unsigned int flags2 = flags;
 
-    flags2 = flags2 | ((value < 0) << VALUE_NEG_POS);
-    flags2 = flags2 | ((value == 0) << VALUE_ZERO_POS);
+    flags2 |= ((value < 0) << VALUE_NEG_POS);
+    flags2 |= ((value == 0) << VALUE_ZERO_POS);
 
     if (value < 0)
         abs_val = -value;
@@ -322,7 +329,7 @@ static void print_num_lu(char **bufptr, fs_size *left, int *ret,
     char tmp[DEC_BUFSIZE];
     int len;
     unsigned int flags2 = flags;
-    flags2 = flags2 | ((value == 0) << VALUE_ZERO_POS);
+    flags2 |= ((value == 0) << VALUE_ZERO_POS);
 
     len = print_decimal_l(tmp, DEC_BUFSIZE, value);
     print_num_pad(bufptr, left, ret, minw, precision, flags2,  
@@ -337,7 +344,7 @@ static void print_num_lx(char **bufptr, fs_size *left, int *ret,
     char tmp[DEC_BUFSIZE];
     int len;
     unsigned int flags2 = flags;
-    flags2 = flags2 | ((value == 0) << VALUE_ZERO_POS);
+    flags2 |= ((value == 0) << VALUE_ZERO_POS);
 
     len = print_hex_l(tmp, DEC_BUFSIZE, value, flags2);
     print_num_pad(bufptr, left, ret, minw, precision, flags2, 
@@ -433,7 +440,7 @@ static int print_hex_ll(char *buf, int bufsz, unsigned long value, unsigned int 
     }
     else while (val && len < bufsz)
     {
-        buf[len] = lut[val & 0xF];
+        buf[len] = lut[val & 0xF]; /* lookup each nibble of a byte */
         val >>= 4;
         len += 1;
     }
@@ -459,8 +466,8 @@ static void print_num_lld(char **bufptr, fs_size *left, int *ret,
     int len;
     unsigned int flags2 = flags;
 
-    flags2 = flags2 | ((value < 0) << VALUE_NEG_POS);
-    flags2 = flags2 | ((value == 0) << VALUE_ZERO_POS);
+    flags2 |= ((value < 0) << VALUE_NEG_POS);
+    flags2 |= ((value == 0) << VALUE_ZERO_POS);
 
     if (value < 0)
         abs_val = -value;
@@ -482,7 +489,7 @@ static void print_num_llu(char **bufptr, fs_size *left, int *ret,
     char tmp[DEC_BUFSIZE];
     int len;
     unsigned int flags2 = flags;
-    flags2 = flags2 | ((value == 0) << VALUE_ZERO_POS);
+    flags2 |= ((value == 0) << VALUE_ZERO_POS);
 
     len = print_decimal_ll(tmp, DEC_BUFSIZE, value);
     print_num_pad(bufptr, left, ret, minw, precision, flags2,  
@@ -498,7 +505,7 @@ static void print_num_llx(char **bufptr, fs_size *left, int *ret,
     char tmp[DEC_BUFSIZE];
     int len;
     unsigned int flags2 = flags;
-    flags2 = flags2 | ((value == 0) << VALUE_ZERO_POS);
+    flags2 |= ((value == 0) << VALUE_ZERO_POS);
 
     len = print_hex_ll(tmp, DEC_BUFSIZE, value, flags2);
     print_num_pad(bufptr, left, ret, minw, precision, flags2, 
@@ -575,7 +582,7 @@ static int print_float(char *buf, int len,
 
 
 
-#else 
+#else /* !FS_64BIT_DEFINED */ 
 
 
 
@@ -646,7 +653,6 @@ static int print_float(char *buf, int len,
 
 
 
-
 /* outbuf is assumed to have a size of HEX_BUFSIZE */
 static int print_hex_bytes(char *outbuf, const void *ptr, unsigned int flags)
 {
@@ -657,9 +663,8 @@ static int print_hex_bytes(char *outbuf, const void *ptr, unsigned int flags)
         const void *ptr;
     } cvt;
     unsigned int i = 0;
-
-
     cvt.ptr = ptr;
+
     if (flags & CAPITALIZED)
     {
         lut = s_HEXCHARS;
@@ -725,7 +730,7 @@ static void print_num_f(char **bufptr, fs_size *left, int *ret,
     int len;
     unsigned int flags = flags_;
 
-    flags = flags | ((num == 0) << VALUE_ZERO_POS);
+    flags |= ((num == 0) << VALUE_ZERO_POS);
     if (num < 0)
     {
         flags |= VALUE_NEG;
@@ -792,6 +797,9 @@ int fs_vsnprintf(char *buf, fs_size bufsz, const char *fmt, va_list ap)
     char *bufptr = buf;
     fs_size left = bufsz;
 
+    if (NULL == buf)
+        bufsz = 0;
+
 
     while (*fmtptr)
     {
@@ -824,11 +832,11 @@ int fs_vsnprintf(char *buf, fs_size bufsz, const char *fmt, va_list ap)
         {
             switch (*fmtptr)
             {
-            case ' ': flags = flags | SPACE; break;
-            case '0': flags = flags | ZEROPAD; break;
-            case '+': flags = flags | PLUS; break;
-            case '-': flags = flags | PAD_RIGHT; break;
-            case '#': flags = flags | ALTERNATE_FORM; break;
+            case ' ': flags |= SPACE; break;
+            case '0': flags |= ZEROPAD; break;
+            case '+': flags |= PLUS; break;
+            case '-': flags |= PAD_RIGHT; break;
+            case '#': flags |= ALTERNATE_FORM; break;
             default: goto done_flags;
             }
         }
@@ -841,7 +849,7 @@ done_flags:
             minw = va_arg(ap, int);
             if (minw < 0)
             {
-                flags = flags | PAD_RIGHT;
+                flags |= PAD_RIGHT;
                 minw = -minw;
             }
         }
@@ -856,14 +864,14 @@ done_flags:
         if ('.' == *fmtptr)
         {
             fmtptr += 1; /* skip '.' */
-            flags = flags | PRECISION_PROVIDED;
+            flags |= PRECISION_PROVIDED;
             precision = 0;
             if ('*' == *fmtptr)
             {
                 precision = va_arg(ap, int);
                 if (precision < 0)
                 {
-                    flags = flags | PAD_RIGHT;
+                    flags |= PAD_RIGHT;
                     precision = 0;
                 }
             }
@@ -888,17 +896,18 @@ done_flags:
         }
 
         conv = *fmtptr;
-        if (conv) fmtptr += 1;
+        if (conv) 
+            fmtptr += 1;
+        if (is_upper(conv)) 
+        {
+            flags |= CAPITALIZED;
+            conv = TO_LOWER_FROM_UPPER(conv);
+        }
 
         switch (conv)
         {
-        case 'I':
-        case 'D':
-            flags = flags | CAPITALIZED;
-            goto id_fmt; /* suppress implicit fallthrough warning */
         case 'i':
         case 'd':
-id_fmt:
             if (l_count == 0)
                 print_num_ld(&bufptr, &left, &ret, 
                     va_arg(ap, int), minw, precision, flags
@@ -934,9 +943,7 @@ id_fmt:
             break;
 
 
-        case 'X': flags = flags | CAPITALIZED; goto x_fmt;
         case 'x':
-x_fmt:
             if (l_count == 0)
                 print_num_lx(&bufptr, &left, &ret, 
                     va_arg(ap, unsigned int), minw, precision, flags
@@ -954,18 +961,14 @@ x_fmt:
             break;
 
 
-        case 'S': flags = flags | CAPITALIZED; goto s_fmt;
         case 's':
-s_fmt:
             print_str(&bufptr, &left, &ret, 
                 va_arg(ap, const char *), minw, precision, flags
             );
             break;
 
 
-        case 'C': flags = flags | CAPITALIZED; goto c_fmt;
         case 'c':
-c_fmt:
             print_chr(&bufptr, &left, &ret, 
                 va_arg(ap, int), minw, flags
             );
@@ -977,7 +980,7 @@ c_fmt:
                 strerror(errno), minw, precision, flags
             );
             break;
-#endif /* FREESTANDING_TRULY */
+#endif /* !FREESTANDING_TRULY */
 
         case 'p':
             print_ptr(&bufptr, &left, &ret,
@@ -1026,7 +1029,10 @@ c_fmt:
         }
     }
 
-
+    /* left is always greater than 0 if bufsize is nonzero, 
+     * checking because snprintf can be used as 
+     * a kind of strlen for the hypothetically formatted string 
+     * when bufsize is 0 */
     if (left > 0)
         *bufptr = 0;
     return ret;
