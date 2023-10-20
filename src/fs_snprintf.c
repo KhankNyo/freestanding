@@ -30,6 +30,7 @@
 #  define FLT_MAX_PRECISION 9 /* (int)log_10(2^32 - 1) */
 #endif
 
+
 /* flags */
 #define SPACE (1 << 0)
 #define PAD_RIGHT (1 << 1)
@@ -862,6 +863,7 @@ done_flags:
                 precision = va_arg(ap, int);
                 if (precision < 0)
                 {
+                    flags = flags | PAD_RIGHT;
                     precision = 0;
                 }
             }
