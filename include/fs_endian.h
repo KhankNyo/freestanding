@@ -21,11 +21,37 @@ static const union {
 
 
 
+static fs_u32 fs_endian_bswap32(fs_u32 n)
+{
+    fs_u32 ret;
+    fs_u8 *pn = (fs_u8*)&n;
+    fs_u8 *pr = (fs_u8*)&ret;
+
+    pr[0] = pn[3];
+    pr[1] = pn[2];
+    pr[2] = pn[1];
+    pr[3] = pn[0];
+    return ret;
+}
+
+
+static void fs_endian_bswap(void *bytes, fs_size count)
+{
+    fs_size i = 0; 
+    fs_u8 *bptr = bytes;
+    for (; i < count/2; i += 1)
+    {
+        fs_u8 tmp = bptr[i];
+        bptr[i] = bptr[count - i - 1];
+        bptr[count - i - 1] = tmp;
+    }
+}
+
+
 
 static void fs_endian_host_to_little(fs_u8 *buf, fs_size count, unsigned int elem_size)
 {
     fs_size i = 0;
-    fs_size j = 0;
     union {
         fs_u32 *dwptr;
         fs_u8 *byteptr;
@@ -37,14 +63,7 @@ static void fs_endian_host_to_little(fs_u8 *buf, fs_size count, unsigned int ele
     case FS_ENDIAN_LITTLE: break;
     case FS_ENDIAN_BIG:
         for (; i < count * elem_size; i += elem_size)
-        {
-            for (j = 0; j < elem_size; j += 1)
-            {
-                fs_u8 tmp = buf[i + j];
-                buf[i + j] = buf[count - 1 - (i + j)];
-                buf[count - 1 - (i + j)] = tmp;
-            }
-        }
+            fs_endian_bswap(&buf[i], elem_size);
         break;
 
     case FS_ENDIAN_PDP: /* u32 only */
