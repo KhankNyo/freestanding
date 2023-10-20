@@ -4,18 +4,9 @@
 
 
 /* every C compiler should have this */
+#include <stddef.h>
 #include <limits.h>
 #include "fs_standard.h"
-
-
-#ifndef FS_USIZE_DEFINED
-#define FS_USIZE_DEFINED
-#  ifdef FS_C99
-typedef unsigned long long fs_size;
-#  else /* C89 */
-typedef unsigned long fs_size;
-#  endif /* FS_C99 */
-#endif /* FS_USIZE_DEFINED */
 
 
 
@@ -49,7 +40,7 @@ typedef int fs_i16;
 #  if ULONG_MAX == 0xfffffffflu
 typedef unsigned long fs_u32;
 typedef long fs_i32;
-#  elif UING_MAX == 0xfffffffflu
+#  elif ULONG_MAX == 0xfffffffflu
 typedef unsigned int fs_u32;
 typedef int fs_i32;
 #  else
@@ -72,6 +63,15 @@ typedef long fs_i64;
 #    endif
 #  endif /* FS_64BIT_DEFINED */
 #endif /* ULLONG_MAX */
+
+
+
+
+#ifndef FS_USIZE_DEFINED
+#define FS_USIZE_DEFINED
+typedef size_t fs_size;
+#endif /* FS_USIZE_DEFINED */
+
 
 
 
