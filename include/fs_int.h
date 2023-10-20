@@ -12,9 +12,6 @@
 
 #ifndef FS_8BIT_DEFINED
 #define FS_8BIT_DEFINED
-#  if CHAR_BIT != 8
-#    error "fuck you"
-#  endif
 typedef unsigned char fs_u8;
 typedef signed char fs_i8;
 #endif /* FS_8BIT_DEFINED */
