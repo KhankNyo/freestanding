@@ -38,7 +38,7 @@ static const fs_fu32 s_fs_internal_float_endian_test = { 2.0 }; /* 0x40000000 in
 
 
 
-static int fs_exp_of_f(float f)
+static int fs_exp_of_float(float f)
 {
     fs_fu32 cvt;
     fs_u8 exponent;
@@ -57,44 +57,68 @@ static int fs_exp_of_f(float f)
 
 
 
-static int fs_exp_of_d(double d)
+static int fs_exp_of_double(double d)
 {
     fs_u32 exponent;
+    if (sizeof(d) == sizeof(float))
+        return fs_exp_of_float(d);
+    else
+    {
 
 #ifdef FS_64BIT_DEFINED
-    union {
-        double d;
-        fs_u64 u64;
-    } cvt;
-    cvt.d = d;
+        union {
+            double d;
+            fs_u64 u64;
+        } cvt;
+        cvt.d = d;
 
-    if (FS_FLOAT_ENDIAN_DIFFER())
-        cvt.u32 = fs_endian_bswap32(cvt.u32);
+        if (FS_FLOAT_ENDIAN_DIFFER())
+            cvt.u32 = fs_endian_bswap32(cvt.u32);
 
-    exponent = (cvt.u64 >> FS_F64_EXP_POS);
+        exponent = (cvt.u64 >> FS_F64_EXP_POS);
 #else
-    union {
-        double d;
-        fs_u32 u32[sizeof(double) / sizeof(fs_u32)];
-    } cvt;
-    cvt.d = d;
+        union {
+            double d;
+            fs_u32 u32[sizeof(double) / sizeof(fs_u32)];
+        } cvt;
+        cvt.d = d;
 
 
-    if (FS_FLOAT_ENDIAN_DIFFER())
-        fs_endian_bswap(cvt.u32, sizeof(double));
+        if (FS_FLOAT_ENDIAN_DIFFER())
+            fs_endian_bswap(cvt.u32, sizeof(double));
 
-    if (FS_ENDIAN_IS(FS_ENDIAN_LITTLE))
-        exponent = cvt.u32[1];
-    else 
-        exponent = cvt.u32[0];
-    exponent >>= FS_F64_EXP_POS - 32;
+        if (FS_ENDIAN_IS(FS_ENDIAN_LITTLE))
+            exponent = cvt.u32[1];
+        else 
+            exponent = cvt.u32[0];
+        exponent >>= FS_F64_EXP_POS - 32;
 #endif /* FS_64BIT_DEFINED */
 
-    exponent += FS_F64_EXP_BIAS;
-    exponent &= FS_F64_EXP;
-    if (exponent >> 10) /* is signed? then sign extend */
-        exponent |= ~(((fs_u32)1 << 10) - 1);
-    exponent += FS_F64_EXP_BIAS;
+        exponent += FS_F64_EXP_BIAS;
+        exponent &= FS_F64_EXP;
+        if (exponent >> 10) /* is signed? then sign extend */
+            exponent |= ~(((fs_u32)1 << 10) - 1);
+        exponent += FS_F64_EXP_BIAS;
+    }
+
+    return (int)exponent;
+}
+
+
+static int fs_exp_of_ldouble(long double ld)
+{
+    fs_u32 exponent;
+    if (sizeof(ld) == 8) /* 64 bit */
+    {
+        return fs_exp_of_double(ld);
+    }
+    else if (sizeof(ld) == 10) /* 80 bit */
+    {
+    }
+    else if (sizeof(ld) == 16) /* 128 bit */
+    {
+    }
+    
 
     return (int)exponent;
 }
