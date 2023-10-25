@@ -41,7 +41,7 @@
 #define ALTERNATE_FORM          ((unsigned)1 << 4)
 #define PRECISION_PROVIDED      ((unsigned)1 << 5)
 #define CAPITALIZED             ((unsigned)1 << 6)
-#define FLT_OMIT_TRAILING_ZEROS ((unsigned)1 << 7)
+#define FLT_G_FORMAT            ((unsigned)1 << 7)
 
 
 #define VALUE_NEG_POS       8
@@ -62,6 +62,47 @@ static const char s_nullptr_string[6] = "(nil)";
 
 
 
+#ifdef FS_64BIT_DEFINED
+
+static fs_u64 quick_pow10(fs_u64 n)
+{
+    static fs_u64 lut[] = {
+        1, 10, 100, 1000, 10000,
+        100000, 
+        1000000, 
+        10000000,
+        100000000, 
+        (fs_u64)1000000000,
+        (fs_u64)10000000000, 
+        (fs_u64)100000000000, 
+        (fs_u64)1000000000000,
+        (fs_u64)10000000000000,
+        (fs_u64)100000000000000,
+        (fs_u64)1000000000000000,       /* 10^15 */
+        (fs_u64)10000000000000000,      /* 10^16 */
+        (fs_u64)100000000000000000,     /* 10^17 */
+        (fs_u64)1000000000000000000,    /* 10^19 */
+    };
+    return lut[n % FS_STATIC_ARRAYSIZE(lut)];
+}
+
+#else
+
+static fs_u32 quick_pow10(fs_u32 n)
+{
+    static fs_u32 lut[] = {
+        1, 10, 100, 1000, 10000,
+        100000, 
+        1000000, 
+        10000000,
+        100000000, 
+        1000000000, /* 10^9 */
+    };
+    return lut[n % FS_STATIC_ARRAYSIZE(lut)];
+}
+
+#endif /* FS_64BIT_DEFINED */
+
 
 static int is_number(char ch)
 {
@@ -80,11 +121,19 @@ static int is_upper(char ch)
 }
 
 
-static int g_format_should_use_e(int exponent)
+static int g_format_should_use_e(int exponent, int precision, unsigned int flags)
 {
-    return exponent < -4 
-        || 4 < exponent;
+    int threshold = 4;
+    if (flags & PRECISION_PROVIDED)
+        threshold = precision;
+
+    exponent *= 0.30102999566; /* log_10(2) */
+    return exponent < -threshold
+        || threshold < exponent;
 }
+
+
+
 
 
 
@@ -410,29 +459,6 @@ static void print_chr(char **bufptr, fs_size *left, int *ret,
 
 
 
-static fs_u64 quick_pow10(fs_u64 n)
-{
-    static fs_u64 lut[] = {
-        1, 10, 100, 1000, 10000,
-        100000, 
-        1000000, 
-        10000000,
-        100000000, 
-        (fs_u64)1000000000,
-        (fs_u64)10000000000, 
-        (fs_u64)100000000000, 
-        (fs_u64)1000000000000,
-        (fs_u64)10000000000000,
-        (fs_u64)100000000000000,
-        (fs_u64)1000000000000000,       /* 10^15 */
-        (fs_u64)10000000000000000,      /* 10^16 */
-        (fs_u64)100000000000000000,     /* 10^17 */
-        (fs_u64)1000000000000000000,    /* 10^19 */
-    };
-    return lut[n % FS_STATIC_ARRAYSIZE(lut)];
-}
-
-
 
 /* prints the reversed version of val into buf */
 static int print_decimal_ll(char *buf, int bufsz, unsigned long long val)
@@ -557,11 +583,11 @@ static void print_num_llx(char **bufptr, fs_size *left, int *ret,
 
 
 static int print_float_remainder(char *buf, int len,
-    double remainder, int precision, unsigned int omit_trailing_zeros)
+    double remainder, int precision, unsigned int flags)
 {
     int count = 0;
     fs_u64 value;
-    unsigned int shift = 1; /* power of 10 required to turn the remainder into a whole number */
+    fs_u64 shift; /* power of 10 required to turn the remainder into a whole number */
 
     if (precision > FLT_MAX_PRECISION)
         precision = FLT_MAX_PRECISION;
@@ -580,10 +606,24 @@ static int print_float_remainder(char *buf, int len,
             value = shift - 1;
     }
 
-    if (omit_trailing_zeros && 0 == value)
-        return 0;
-    count = print_decimal_ll(buf, len, value);
+    /* only do this after rounding */
+    if (flags & FLT_G_FORMAT)
+    {
+        int omitted_zeros = 0;
+        if (0 == value)
+            return 0;
 
+        while (value && (value % 10 == 0))
+        {
+            omitted_zeros += 1;
+            value /= 10;
+        }
+        if (omitted_zeros < precision)
+            precision -= omitted_zeros;
+    }
+
+
+    count = print_decimal_ll(buf, len, value);
     /* pad zeros for numbers like 0.004 */
     while (count < precision)
     {
@@ -601,21 +641,39 @@ static int print_float_remainder(char *buf, int len,
 
 
 /* value itself should NOT be negative */
-static int print_float(char *buf, int len, 
-    double value, int precision, unsigned int omit_trailing_zeros)
+static int print_float(char **buf, int len, 
+    double value, int precision, unsigned int flags)
 {
-    int fltlen = 0;
+    int remainder_len = 0, whole_len = 0, total_len;
     fs_u64 whole = (fs_u64)value;
+    double remainder = value - (double)whole;
+
     /* leave print_float_remainder to check for trailing zeros,
      * because double might not be accurate enough */
-    double remainder = value - (double)whole;
     if (precision)
-        fltlen = print_float_remainder(buf, len,
-            remainder, precision, omit_trailing_zeros
+    {
+        remainder_len = print_float_remainder(*buf, len,
+            remainder, precision, flags
         );
+    }
 
-    fltlen += print_decimal_ll(buf + fltlen, len - fltlen, whole);
-    return fltlen;
+    whole_len = print_decimal_ll(
+        *buf + remainder_len, len - remainder_len, whole
+    );
+
+    total_len = whole_len + remainder_len;
+    if ((flags & FLT_G_FORMAT) 
+    && remainder_len && (total_len - 1 > precision))
+    {
+        int insignif_len = total_len - precision;
+        (*buf) += insignif_len;
+
+        if (len >= insignif_len + precision) /* buffer len check */
+            total_len = precision;
+        else
+            total_len = 0;
+    }
+    return total_len;
 }
 
 
@@ -624,26 +682,12 @@ static int print_float(char *buf, int len,
 #else /* !FS_64BIT_DEFINED */ 
 
 
-static fs_u32 quick_pow10(fs_u32 n)
-{
-    static fs_u32 lut[] = {
-        1, 10, 100, 1000, 10000,
-        100000, 
-        1000000, 
-        10000000,
-        100000000, 
-        1000000000, /* 10^9 */
-    };
-    return lut[n % FS_STATIC_ARRAYSIZE(lut)];
-}
-
-
 static int print_float_remainder(char *buf, int len,
-    double remainder, int precision, unsigned int omit_trailing_zeros)
+    double remainder, int precision, unsigned int flags)
 {
     int count = 0;
     fs_u32 value;
-    unsigned int shift; /* power of 10 required to turn the remainder into a whole number */
+    fs_u32 shift; /* power of 10 required to turn the remainder into a whole number */
 
     if (precision > FLT_MAX_PRECISION)
         precision = FLT_MAX_PRECISION;
@@ -663,11 +707,23 @@ static int print_float_remainder(char *buf, int len,
         if (value >= shift) 
             value = shift - 1;
     }
-    if (omit_trailing_zeros && 0 == value)
-        return 0;
+
+    /* only do this after rounding */
+    if (flags & FLT_G_FORMAT)
+    {
+        int omitted_zeros = 0;
+        if (0 == value)
+            return 0;
+        while (value % 10 == 0)
+        {
+            omitted_zeros += 1;
+            value /= 10;
+        }
+        if (omitted_zeros < precision)
+            precision -= omitted_zeros;
+    }
 
     count = print_decimal_l(buf, len, value);
-
     /* pad zeros for numbers like 0.004 */
     while (count < precision)
     {
@@ -684,22 +740,39 @@ static int print_float_remainder(char *buf, int len,
 
 
 /* value itself should NOT be negative */
-static int print_float(char *buf, int len, 
-    double value, int precision, unsigned int omit_trailing_zeros)
+static int print_float(char **buf, int len, 
+    double value, int precision, unsigned int flags)
 {
-    int fltlen = 0;
+    int whole_len = 0, remainder_len = 0, total_len;
     fs_u32 whole = (fs_u32)value;
+    double remainder = value - (double)whole;
 
     /* double might not be accurate enough, 
      * leave print_float_remainder to check for trailing zeros */
-    double remainder = value - (double)whole;
     if (precision)
-        fltlen = print_float_remainder(buf, len,
-            remainder, precision, omit_trailing_zeros
+    {
+        remainder_len = print_float_remainder(*buf, len,
+            remainder, precision, flags
         );
+    }
 
-    fltlen += print_decimal_l(buf + fltlen, len - fltlen, whole);
-    return fltlen;
+    whole_len = print_decimal_l(
+        *buf + remainder_len, len - remainder_len, whole
+    );
+
+    total_len = whole_len + remainder_len;
+    if ((flags & FLT_G_FORMAT)
+    && remainder_len && (total_len - 1 > precision))
+    {
+        int insignif_len = total_len - precision;
+        (*buf) += insignif_len;
+
+        if (len >= insignif_len + precision) /* buffer len check */
+            total_len = precision;
+        else
+            total_len = 0;
+    }
+    return total_len;
 }
 
 
@@ -782,9 +855,12 @@ static void print_ptr(char **bufptr, fs_size *left, int *ret,
 static void print_num_f(char **bufptr, fs_size *left, int *ret,
     double num, int minw, int precision, unsigned int flags_)
 {
-    char tmp[FLT_BUFSIZE];
+    char a_tmp[FLT_BUFSIZE];
+    char *tmp = a_tmp;
+    char sign;
     int len;
     unsigned int flags = flags_;
+    (void)minw;
 
     flags |= ((num == 0) << VALUE_ZERO_POS);
     if (num < 0)
@@ -795,13 +871,17 @@ static void print_num_f(char **bufptr, fs_size *left, int *ret,
     if (!(flags & PRECISION_PROVIDED))
         precision = FLT_DEFAULT_PRECISION;
 
-    len = print_float(tmp, sizeof(tmp), 
-        num, precision, flags & FLT_OMIT_TRAILING_ZEROS
+
+    len = print_float(&tmp, FLT_BUFSIZE, 
+        num, precision, flags
     );
-    print_num_pad(bufptr, left, ret, 
-        minw, precision, flags,
-        tmp, len
-    );
+
+    sign = get_signch(flags);
+    if (sign && len)
+    {
+        print_pad(bufptr, left, ret, sign, 1);
+    }
+    spool_str_rev(bufptr, left, ret, tmp, len);
 }
 
 
@@ -833,10 +913,10 @@ static void print_num_g(char **bufptr, fs_size *left, int *ret,
 {
     int exponent = fs_exp_of_double(num);
 
-    if (g_format_should_use_e(exponent))
-        print_num_e(bufptr, left, ret, num, minw, precision, flags_ | FLT_OMIT_TRAILING_ZEROS);
+    if (g_format_should_use_e(exponent, precision, flags_))
+        print_num_e(bufptr, left, ret, num, minw, precision, flags_);
     else
-        print_num_f(bufptr, left, ret, num, minw, precision, flags_);
+        print_num_f(bufptr, left, ret, num, minw, precision, flags_ | FLT_G_FORMAT);
 }
 
 
@@ -845,10 +925,10 @@ static void print_num_lg(char **bufptr, fs_size *left, int *ret,
 {
     int exponent = fs_exp_of_ldouble(num);
 
-    if (g_format_should_use_e(exponent))
+    if (g_format_should_use_e(exponent, precision, flags_))
         print_num_le(bufptr, left, ret, num, minw, precision, flags_);
     else
-        print_num_lf(bufptr, left, ret, num, minw, precision, flags_ | FLT_OMIT_TRAILING_ZEROS);
+        print_num_lf(bufptr, left, ret, num, minw, precision, flags_ | FLT_G_FORMAT);
 }
 
 
@@ -951,8 +1031,10 @@ done_flags:
             fmtptr += 1; /* skip '.' */
             flags |= PRECISION_PROVIDED;
             precision = 0;
+
             if ('*' == *fmtptr)
             {
+                fmtptr += 1; /* skips '*' */
                 precision = va_arg(ap, int);
                 if (precision < 0)
                 {
@@ -1382,6 +1464,8 @@ int main(void)
             "packet %2.2x%2.2x%2.2x%2.2x id", 0x12, 0x03, 0xce, 0xff);
     DOTEST(1024, "/tmp/testbound_123abcd.tmp", 26, "/tmp/testbound_%u%s%s.tmp", 123, "ab", "cd");
 
+
+    printf("All basic tests passed!\n");
     return 0;
 }
 #endif /* SNPRINTF_TEST */
