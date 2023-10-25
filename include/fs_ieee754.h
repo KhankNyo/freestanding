@@ -12,12 +12,12 @@
 #define FS_F32_SIGN_POS (31)
 #define FS_F32_EXP (0xFF)
 #define FS_F32_MANTISSA ((fs_u32)0x007FFFFF)
-#define FS_F32_BIAS (127)
+#define FS_F32_BIAS (-127)
 
 #define FS_F64_EXP_POS (52)
 #define FS_F64_SIGN_POS (63)
 #define FS_F64_EXP ((fs_u32)0x7FF)
-#define FS_F64_EXP_BIAS (0x3FF)
+#define FS_F64_EXP_BIAS (-0x3FF)
 
 
 
@@ -32,7 +32,7 @@ static const fs_fu32 s_fs_internal_float_endian_test = { 2.0 }; /* 0x40000000 in
 
 /* returns true if float is little endian, false otherwise */
 #define FS_FLOAT_ENDIAN_DIFFER() \
-    (s_fs_internal_float_endian_test.u32 > 0x00008000)
+    (s_fs_internal_float_endian_test.u32 < 0x00008000)
 
 
 
@@ -73,7 +73,7 @@ static int fs_exp_of_double(double d)
         cvt.d = d;
 
         if (FS_FLOAT_ENDIAN_DIFFER())
-            cvt.u32 = fs_endian_bswap32(cvt.u32);
+            fs_endian_bswap(&cvt.u64, sizeof(cvt.u64));
 
         exponent = (cvt.u64 >> FS_F64_EXP_POS);
 #else
@@ -85,7 +85,7 @@ static int fs_exp_of_double(double d)
 
 
         if (FS_FLOAT_ENDIAN_DIFFER())
-            fs_endian_bswap(cvt.u32, sizeof(double));
+            fs_endian_bswap(cvt.u32, sizeof cvt.u32);
 
         if (FS_ENDIAN_IS(FS_ENDIAN_LITTLE))
             exponent = cvt.u32[1];
@@ -98,7 +98,6 @@ static int fs_exp_of_double(double d)
         exponent &= FS_F64_EXP;
         if (exponent >> 10) /* is signed? then sign extend */
             exponent |= ~(((fs_u32)1 << 10) - 1);
-        exponent += FS_F64_EXP_BIAS;
     }
 
     return (int)exponent;
