@@ -55,9 +55,9 @@
 
 
 
-static const char s_hexchars[17] = "0123456789abcdef";
-static const char s_HEXCHARS[17] = "0123456789ABCDEF";
-static const char s_nullptr_string[6] = "(nil)";
+static const char s_hexchars[] = "0123456789abcdef";
+static const char s_HEXCHARS[] = "0123456789ABCDEF";
+static const char s_nullptr_string[] = "(nil)";
 
 
 
@@ -123,7 +123,7 @@ static int is_upper(char ch)
 
 static int g_format_should_use_e(int exponent, int precision, unsigned int flags)
 {
-    int threshold = 4;
+    int threshold = 4; /* default value by the C standard, 10^4 */
     if (flags & PRECISION_PROVIDED)
         threshold = precision;
 
@@ -1007,7 +1007,7 @@ int fs_vsnprintf(char *buf, fs_size bufsz, const char *fmt, va_list ap)
         }
 done_flags:
 
-        /* get width */
+        /* get variable width */
         if ('*' == *fmtptr)
         {
             fmtptr += 1; /* skips '*' */
@@ -1018,6 +1018,7 @@ done_flags:
                 minw = -minw;
             }
         }
+        /* parse width */
         else while (is_number(*fmtptr))
         {
             minw = minw * 10 + (*fmtptr) - '0';
@@ -1032,6 +1033,7 @@ done_flags:
             flags |= PRECISION_PROVIDED;
             precision = 0;
 
+            /* variable precision */
             if ('*' == *fmtptr)
             {
                 fmtptr += 1; /* skips '*' */
@@ -1042,6 +1044,7 @@ done_flags:
                     precision = 0;
                 }
             }
+            /* parse precision */
             else while (is_number(*fmtptr))
             {
                 precision = precision * 10 + (*fmtptr) - '0';
