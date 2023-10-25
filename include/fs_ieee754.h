@@ -30,7 +30,7 @@ typedef union fs_internal_f32_u32
 
 static const fs_fu32 s_fs_internal_float_endian_test = { 2.0 }; /* 0x40000000 in hex */
 
-/* returns true if float is little endian, false otherwise */
+/* returns true if floating point endian is different from integer endian, false otherwise */
 #define FS_FLOAT_ENDIAN_DIFFER() \
     (s_fs_internal_float_endian_test.u32 < 0x00008000)
 
